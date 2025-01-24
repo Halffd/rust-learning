@@ -3,8 +3,8 @@ struct Queue<T> {
 }
 
 impl<T> Queue<T> {
-    Queue { data: Vec::new() }
     fn new() -> Self {
+        Queue { data: Vec::new() }
     }
 
     fn enqueue(&mut self, value: T) {
@@ -30,20 +30,10 @@ impl<T> Queue<T> {
 
 fn main() {
     let mut queue = Queue::new();
+
     queue.enqueue(10);
     queue.enqueue(20);
-
-    // Using raw pointers to access the front element
-    let front_element: *const i32 = queue.peek().map_or(std::ptr::null(), |&x| &x);
-
-    unsafe {
-        if !front_element.is_null() {
-            println!("Front element: {:?}", *front_element);
-        } else {
-            println!("Queue is empty, no front element.");
-        }
-    }
-
+    println!("Front element: {:?}", queue.peek());
     println!("Dequeued element: {:?}", queue.dequeue());
     println!("Dequeued element: {:?}", queue.dequeue());
 }
