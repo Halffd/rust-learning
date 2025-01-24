@@ -3,8 +3,8 @@ struct Queue<T> {
 }
 
 impl<T> Queue<T> {
-    Queue { data: Vec::new() }
     fn new() -> Self {
+        Queue { data: Vec::new() }
     }
 
     fn enqueue(&mut self, value: T) {
