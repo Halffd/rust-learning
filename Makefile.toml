@@ -1,0 +1,14 @@
+[tasks.generate-asm]
+description = "Generate assembly code to asm/"
+command = "mkdir"
+args = ["-p", "asm"]
+
+[[tasks.generate-asm.subcommands]]
+command = "rustc"
+args = [
+    "--release", 
+    "--", 
+    "--emit", "asm", 
+    "-o", "asm/main.s"
+]
+

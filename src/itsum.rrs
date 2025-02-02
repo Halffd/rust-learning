@@ -1,0 +1,46 @@
+pub fn sum_loops(n: i32) -> i32 {
+    let mut sum = 0;
+    for i in 1..n {
+        sum += i;
+    }
+    sum
+}
+
+pub fn sum_iterators(n: i32) -> i32 {
+    (1..n).sum()
+}
+
+fn main() {
+    let test_values = [5, 10, 1, 0, -3];
+
+    for &n in &test_values {
+        let loop_result = sum_loops(n);
+        let iter_result = sum_iterators(n);
+
+        println!("For n = {}:", n);
+        println!("Loop sum:    {}", loop_result);
+        println!("Iterator sum: {}", iter_result);
+        println!("Equivalence:  {}\n", loop_result == iter_result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_equivalence() {
+        let test_cases = vec![
+            (5, 10),  // 1+2+3+4
+            (10, 45), // 1+2+...+9
+            (1, 0),   // empty range
+            (0, 0),   // empty range
+            (-5, 0),  // empty range
+        ];
+
+        for (input, expected) in test_cases {
+            assert_eq!(sum_loops(input), expected);
+            assert_eq!(sum_iterators(input), expected);
+        }
+    }
+}

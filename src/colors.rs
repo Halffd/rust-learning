@@ -23,7 +23,7 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (u8, u8, u8) {
 }
 
 fn main() {
-    let input = str::replace("Hello, T!", "T", "E");
+    let input = "hello, 77";
     let length = input.chars().count() as f32;
 
     for (i, c) in input.chars().enumerate() {
