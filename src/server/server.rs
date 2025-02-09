@@ -31,91 +31,70 @@ async fn handle_request(
     let path = req.uri().path();
     let method = req.method();
 
-    match (method, path) {
-        (&Method::GET, "/") => serve_file("index.html").await,
-        (&Method::GET, "/login") => serve_file("login.html").await,
-        (&Method::GET, "/register") => serve_file("register.html").await,
+    Ok(match (method, path) {
+        (&Method::GET, "/") => serve_file("index.html").await?,
+        (&Method::GET, "/login") => serve_file("login.html").await?,
+        (&Method::GET, "/register") => serve_file("register.html").await?,
         (&Method::POST, "/register") => {
-            // Handle registration form submission
-            let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
-            let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
-            let params: Vec<_> = body_str
-                .split('&')
-                .map(|s| {
-                    let mut parts = s.split('=');
-                    (parts.next().unwrap(), parts.next().unwrap_or(""))
-                })
-                .collect();
-
-            let username = params
-                .iter()
-                .find(|(k, _)| *k == "username")
-                .map(|(_, v)| *v)
-                .unwrap_or("");
-            let password = params
-                .iter()
-                .find(|(k, _)| *k == "password")
-                .map(|(_, v)| *v)
-                .unwrap_or("");
+            let params = parse_form_data(req).await;
+            let username = params.get("username").map(|s| s.as_str()).unwrap_or("");
+            let password = params.get("password").map(|s| s.as_str()).unwrap_or("");
 
             match state.db.register_user(username, password).await {
-                Ok(_) => Ok(Response::builder()
+                Ok(_) => Response::builder()
                     .status(StatusCode::FOUND)
                     .header("Location", "/login")
                     .body(Body::from("Registration successful! Please login."))
-                    .unwrap()),
-                Err(DatabaseError::UserExists) => Ok(Response::builder()
+                    .unwrap(),
+                Err(DatabaseError::UserExists) => Response::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .body(Body::from("Username already exists"))
-                    .unwrap()),
-                Err(_) => Ok(Response::builder()
+                    .unwrap(),
+                Err(_) => Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
                     .body(Body::from("Registration failed"))
-                    .unwrap()),
+                    .unwrap(),
             }
         }
         (&Method::POST, "/login") => {
-            // Handle login form submission
-            let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
-            let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
-            let params: Vec<_> = body_str
-                .split('&')
-                .map(|s| {
-                    let mut parts = s.split('=');
-                    (parts.next().unwrap(), parts.next().unwrap_or(""))
-                })
-                .collect();
+            let params = parse_form_data(req).await;
+            let username = params.get("username").map(|s| s.as_str()).unwrap_or("");
+            let password = params.get("password").map(|s| s.as_str()).unwrap_or("");
 
-            let username = params
-                .iter()
-                .find(|(k, _)| *k == "username")
-                .map(|(_, v)| *v)
-                .unwrap_or("");
-            let password = params
-                .iter()
-                .find(|(k, _)| *k == "password")
-                .map(|(_, v)| *v)
-                .unwrap_or("");
-
-            // Verify user credentials
             match state.db.verify_user(username, password).await {
-                Ok(true) => Ok(Response::builder()
+                Ok(true) => Response::builder()
                     .status(StatusCode::FOUND)
                     .header("Location", "/dashboard")
                     .body(Body::empty())
-                    .unwrap()),
-                _ => Ok(Response::builder()
+                    .unwrap(),
+                _ => Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(Body::from("Invalid credentials"))
-                    .unwrap()),
+                    .unwrap(),
             }
         }
-        (&Method::GET, "/dashboard") => serve_file("dashboard.html").await,
-        _ => Ok(Response::builder()
+        (&Method::GET, "/dashboard") => serve_file("dashboard.html").await?,
+        _ => Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("Not Found"))
-            .unwrap()),
-    }
+            .unwrap(),
+    })
+}
+
+async fn parse_form_data(req: Request<Body>) -> std::collections::HashMap<String, String> {
+    let body_bytes = hyper::body::to_bytes(req.into_body()).await.unwrap();
+    let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+    
+    body_str
+        .split('&')
+        .filter_map(|s| {
+            let mut parts = s.split('=');
+            Some((
+                parts.next()?.to_string(),
+                parts.next()?.to_string(),
+            ))
+        })
+        .collect()
 }
 
 pub async fn start_server() -> Result<(), Box<dyn std::error::Error>> {
