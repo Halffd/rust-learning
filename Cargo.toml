@@ -6,5 +6,7 @@ edition = "2021"
 [dependencies]
 colored = "2.0.0"
 dotenv = "0.15.0"
-sqlx = { version = "0.8.3", features = ["sqlite", "macros", "runtime-tokio-rustls"] }
-tokio = { version = "1.43.0", features = ["full"] }
+hyper = { version = "0.14", features = ["full"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite"] }
+tokio = { version = "1.0", features = ["full"] }
+glob = "0.3.1"

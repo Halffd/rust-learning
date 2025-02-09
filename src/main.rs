@@ -1,82 +1,108 @@
-use sqlx::{sqlite::SqliteConnectOptions, Error, SqlitePool};
-use std::{env, path::Path};
+use std::env;
+use std::process::Command;
+use glob::glob;
+use std::path::{Path, PathBuf};
+use std::fs;
 
-async fn connect(filename: impl AsRef<Path>) -> Result<SqlitePool, Error> {
-    let options = SqliteConnectOptions::new()
-        .filename(filename)
-        .create_if_missing(true); // Create the database file if it doesn't exist
+mod server;
 
-    let pool = SqlitePool::connect_with(options).await?;
-    println!("Connected to the database successfully.");
-    Ok(pool)
-}
+const DEFAULT_FILE_PATH: &str = "src/server/server.rs";
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() {
     let args: Vec<String> = env::args().collect();
-    let is_setup = args.contains(&"--setup".to_string());
 
-    let pool = connect("sql.db").await?;
+    // Create build directory if it doesn't exist
+    fs::create_dir_all("build").expect("Failed to create build directory");
 
-    // Create schema
-    match sqlx::query(
-        r#"CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            country TEXT NOT NULL,
-            organization TEXT NOT NULL
-        )"#,
-    )
-    .execute(&pool)
-    .await
-    {
-        Ok(_) => println!("Users table created or already exists."),
-        Err(err) => eprintln!("Error creating users table: {}", err),
+    if args.len() < 2 {
+        // Run the default server
+        if let Err(e) = server::server::start_server().await {
+            eprintln!("Server error: {}", e);
+        }
+        return;
     }
 
-    if is_setup {
-        // Insert base data
-        let data = [
-            ("USA", "01234567890ABCDEF"),
-            ("Canada", "01234567890ABCDEF"),
-            ("USA", "ABCDEF1234567890"),
-        ];
+    match args[1].as_str() {
+        "-h" | "--help" => {
+            print_help();
+            list_rust_files();
+        }
+        file_path => {
+            run_rust_file(file_path);
+        }
+    }
+}
 
-        for (country, org) in data {
-            match sqlx::query("INSERT INTO users (country, organization) VALUES (?, ?)")
-                .bind(country)
-                .bind(org)
-                .execute(&pool)
-                .await
-            {
-                Ok(_) => println!("Inserted data: {} - {}", country, org),
-                Err(err) => eprintln!("Error inserting data: {}", err),
+fn list_rust_files() {
+    println!("\nAvailable Rust files:");
+    match glob("**/*.rs").expect("Failed to read glob pattern") {
+        Iter => {
+            for entry in Iter {
+                match entry {
+                    Ok(path) => println!("  {}", path.display()),
+                    Err(e) => eprintln!("Error: {}", e),
+                }
             }
         }
-        return Ok(());
     }
-    // Regular query execution
-    let organization = "01234567890ABCDEF";
-    let countries = match sqlx::query!(
-        r#"SELECT country, COUNT(*) as count
-           FROM users
-           WHERE organization = ?
-           GROUP BY country"#,
-        organization
-    )
-    .fetch_all(&pool)
-    .await
-    {
-        Ok(records) => records,
-        Err(err) => {
-            eprintln!("Error fetching data: {}", err);
-            return Err(err);
+}
+
+fn run_rust_file(file_path: &str) {
+    let path = PathBuf::from(file_path);
+    
+    if !path.exists() {
+        eprintln!("Error: File '{}' not found", file_path);
+        return;
+    }
+    
+    if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+        eprintln!("Error: File must be a Rust file (.rs extension)");
+        return;
+    }
+
+    println!("Compiling and running: {}", file_path);
+    
+    // Generate executable name from the source file name
+    let executable_name = path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|name| format!("build/{}{}", name, env::consts::EXE_SUFFIX))
+        .expect("Failed to generate executable name");
+
+    // Compile the file using rustc
+    let output = Command::new("rustc")
+        .arg(file_path)
+        .arg("-o")
+        .arg(&executable_name)
+        .output();
+
+    match output {
+        Ok(output) => {
+            if !output.status.success() {
+                eprintln!("Compilation failed:");
+                eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                return;
+            }
+
+            // Run the compiled executable
+            let run_result = Command::new(Path::new(&executable_name)).status();
+            match run_result {
+                Ok(status) => {
+                    if !status.success() {
+                        eprintln!("Program execution failed");
+                    }
+                }
+                Err(e) => eprintln!("Failed to execute program: {}", e),
+            }
         }
-    };
-
-    println!("Country counts for '{}':", organization);
-    for record in countries {
-        println!("- {}: {}", record.country, record.count);
+        Err(e) => eprintln!("Failed to compile: {}", e),
     }
+}
 
-    Ok(())
+fn print_help() {
+    println!("Usage: {} [OPTIONS] <rust_file>", env::args().next().unwrap());
+    println!("\nOptions:");
+    println!("  -h, --help    Show this help message and list available Rust files");
+    println!("\nExample:");
+    println!("  {} example.rs", env::args().next().unwrap());
 }
